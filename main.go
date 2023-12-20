@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gocolly/colly"
 	"log"
+	"time"
 )
 
 func main() {
@@ -21,6 +22,10 @@ func main() {
 	months[11] = "november-11"
 	months[12] = "december-12"
 
+	currentTime := time.Now()
+	//formattedTime := currentTime.Month().String()[0:3] + " " + strconv.Itoa(currentTime.Day())
+	monthDigit := int(currentTime.Month())
+
 	c := colly.NewCollector(colly.AllowURLRevisit())
 	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("User-Agent", "1 Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148")
@@ -37,12 +42,10 @@ func main() {
 		imageLink := e.ChildAttr(".image > a > img", "data-src")
 		albumLink := fmt.Sprintf("https://www.albumoftheyear.org%s", e.ChildAttr("a", "href"))
 
-		if date == "Jan 7" {
-			log.Println(fmt.Sprintf("%s - %s\n\t\t\t%s\n\t\t\t%s\n\t\t\t%s", artist, albumName, date, imageLink, albumLink))
-		}
+		log.Println(fmt.Sprintf("%s - %s\n\t\t\t%s\n\t\t\t%s\n\t\t\t%s", artist, albumName, date, imageLink, albumLink))
 	})
 
-	for year := 2000; year <= 2023; year++ {
-		c.Visit(fmt.Sprintf("https://www.albumoftheyear.org/%d/releases/%s?type=lp", year, months[1]))
+	for year := currentTime.Year() - 50; year < currentTime.Year(); year++ {
+		c.Visit(fmt.Sprintf("https://www.albumoftheyear.org/%d/releases/%s?type=lp", year, months[monthDigit]))
 	}
 }
