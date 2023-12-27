@@ -2,50 +2,66 @@ package main
 
 import (
 	"fmt"
-	"github.com/gocolly/colly"
-	"log"
 	"time"
+    "github.com/caffix/cloudflare-roundtripper/cfrt"
+    "github.com/PuerkitoBio/goquery"
+    "net"
+    "net/http"
+    "net/url"
 )
 
+const BASE_URL = "https://www.albumoftheyear.org"
+
 func main() {
-	months := make(map[int]string)
-	months[1] = "january-01"
-	months[2] = "february-02"
-	months[3] = "march-03"
-	months[4] = "april-04"
-	months[5] = "may-05"
-	months[6] = "june-06"
-	months[7] = "july-07"
-	months[8] = "august-08"
-	months[9] = "september-09"
-	months[10] = "october-10"
-	months[11] = "november-11"
-	months[12] = "december-12"
+//    currentTime := time.Now()
+//	monthDigit := int(currentTime.Month()) 
 
-	currentTime := time.Now()
-	//formattedTime := currentTime.Month().String()[0:3] + " " + strconv.Itoa(currentTime.Day())
-	monthDigit := int(currentTime.Month())
+    setDate := "2023-11"
+    client := &http.Client{
+        Timeout: 15 * time.Second,
+        Transport: &http.Transport{
+            DialContext: (&net.Dialer{
+                Timeout:   15 * time.Second,
+                KeepAlive: 15 * time.Second,
+                DualStack: true,
+            }).DialContext,
+        },
+    }
 
-	c := colly.NewCollector(colly.AllowURLRevisit())
-	c.OnRequest(func(r *colly.Request) {
-		r.Headers.Set("User-Agent", "1 Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148")
+    var err error
+    client.Transport, err = cfrt.New(client.Transport)
+    if err != nil {
+        return
+    }
+
+
+	posturl := BASE_URL + "/scripts/showMore.php"
+    response, err := client.PostForm(posturl, url.Values{
+        "albumType": {"lp"},
+        "date": {setDate},
+        "type": {"albumMonth"},
+        "start": {"0"},
+    })
+
+    if err != nil {
+        fmt.Println("error", err.Error())
+        return
+    }
+
+    defer response.Body.Close()
+    
+    doc, err := goquery.NewDocumentFromReader(response.Body)
+    if err != nil {
+        return
+    }
+
+     // Find the review items
+    doc.Find(".albumBlock").Each(func(i int, s *goquery.Selection) {
+		// For each item found, get the title
+		title := s.Find(".albumTitle").Text()
+		artist := s.Find(".artistTitle").Text()
+		rating := s.Find(".rating").First().Text()
+        albumLink, _ := s.Find(".image a").Attr("href")
+		fmt.Printf("%s - %s\n\t%s\n\t%s\n", artist, title, rating, BASE_URL + albumLink)
 	})
-
-	c.OnResponse(func(r *colly.Response) { //get body
-		log.Println(fmt.Sprintf("Finished visting %s...", r.Request.URL))
-	})
-
-	c.OnHTML(".albumBlock", func(e *colly.HTMLElement) {
-		artist := e.ChildText(".artistTitle")
-		albumName := e.ChildText(".albumTitle")
-		date := e.ChildText(".date")
-		imageLink := e.ChildAttr(".image > a > img", "data-src")
-		albumLink := fmt.Sprintf("https://www.albumoftheyear.org%s", e.ChildAttr("a", "href"))
-
-		log.Println(fmt.Sprintf("%s - %s\n\t\t\t%s\n\t\t\t%s\n\t\t\t%s", artist, albumName, date, imageLink, albumLink))
-	})
-
-	for year := currentTime.Year() - 50; year < currentTime.Year(); year++ {
-		c.Visit(fmt.Sprintf("https://www.albumoftheyear.org/%d/releases/%s?type=lp", year, months[monthDigit]))
-	}
 }
